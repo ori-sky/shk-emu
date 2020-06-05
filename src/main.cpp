@@ -17,10 +17,11 @@ shk::instruction decode_one(std::istream &is) {
 		shk::command command;
 		command.ty = static_cast<shk::command::type>(byte & 0xF);
 
+		is.read(reinterpret_cast<char *>(&hi), 1);
+		is.read(reinterpret_cast<char *>(&lo), 1);
+
 		instr = decode_one(is);
 		instr.commands.emplace_back(command);
-
-		is >> hi >> lo;
 	} else {
 		instr.op = static_cast<shk::opcode>(byte);
 

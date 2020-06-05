@@ -9,7 +9,8 @@ shk::instruction decode_one(std::istream &is) {
 	shk::instruction instr;
 
 	uint8_t hi, lo;
-	is >> hi >> lo;
+	is.read(reinterpret_cast<char *>(&hi), 1);
+	is.read(reinterpret_cast<char *>(&lo), 1);
 	uint16_t byte = (uint16_t(hi) << 8u) | uint16_t(lo);
 
 	if(byte >> 15u) {
@@ -24,7 +25,8 @@ shk::instruction decode_one(std::istream &is) {
 		instr.op = static_cast<shk::opcode>(byte);
 
 		for(size_t i = 0; i < shk::num_operands(instr.op); ++i) {
-			is >> hi >> lo;
+			is.read(reinterpret_cast<char *>(&hi), 1);
+			is.read(reinterpret_cast<char *>(&lo), 1);
 		}
 	}
 

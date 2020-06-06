@@ -7,9 +7,9 @@
 #include <shk.h>
 
 struct cpu_state {
-	uint16_t mem[0x10000];
-	uint16_t reg[0x100];
-	uint16_t ip;
+	uint16_t mem[0x10000] = {0};
+	uint16_t reg[0x100] = {0};
+	uint16_t ip = 0;
 };
 
 void debug(cpu_state &state) {
@@ -18,8 +18,14 @@ void debug(cpu_state &state) {
 		std::cout << "0x" << std::setfill('0') << std::setw(4) << std::hex << i;
 		std::cout << "] = ";
 		std::cout << "0x" << std::setfill('0') << std::setw(4) << std::hex << state.mem[i];
+		std::cout << "   ";
+		std::cout << "reg[";
+		std::cout << "0x" << std::setfill('0') << std::setw(2) << std::hex << i;
+		std::cout << "] = ";
+		std::cout << "0x" << std::setfill('0') << std::setw(4) << std::hex << state.reg[i];
 		std::cout << std::endl;
 	}
+	std::cout << "ip = " << state.ip << std::endl;
 }
 
 std::optional<shk::instruction> decode(cpu_state &state) {
@@ -43,8 +49,8 @@ std::optional<shk::instruction> decode(cpu_state &state) {
 	instr.op = static_cast<shk::opcode>(state.mem[state.ip++]);
 	for(size_t i = 0; i < shk::num_operands(instr.op); ++i) {
 		shk::operand operand;
-		operand.ty = shk::operand::type::reg; // XXX
 		operand.value = state.mem[state.ip++] & 0xFF;
+		operand.ty = static_cast<shk::operand::type>(operand.value >> 15u);
 		instr.operands.emplace_back(operand);
 	}
 
@@ -63,7 +69,24 @@ bool execute(cpu_state &state) {
 		case shk::opcode::store:
 			state.mem[instr->operands[0].value] = instr->operands[1].value;
 			break;
+		case shk::opcode::move:
+			switch(instr->operands[0].ty) {
+			case shk::operand::type::imm:
+				state.reg[instr->operands[0].value] = instr->operands[1].value;
+				break;
+			case shk::operand::type::reg:
+				state.reg[instr->operands[0].value] = state.reg[instr->operands[1].value];
+				break;
+			default:
+				std::cerr << "error: invalid operand type" << std::endl;
+				break;
+			}
+			break;
+		case shk::opcode::add:
+			state.reg[instr->operands[0].value] = state.reg[instr->operands[1].value] + state.reg[instr->operands[2].value];
+			break;
 		default:
+			std::cerr << "not implemented" << std::endl;
 			break;
 		}
 		std::cout << "executed " << instr->op << std::endl;
@@ -74,6 +97,8 @@ bool execute(cpu_state &state) {
 }
 
 int main(int argc, char *argv[]) {
+	cpu_state state;
+
 	int opt;
 	while((opt = getopt(argc, argv, "")) != -1) {
 		switch(opt) {
@@ -88,9 +113,6 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	cpu_state state;
-	state.ip = 0;
-
 	for(size_t i = 0; i < in_count; ++i) {
 		char *in_path = argv[i + optind];
 
@@ -103,15 +125,6 @@ int main(int argc, char *argv[]) {
 			uint16_t byte = (uint16_t(hi) << 8u) | uint16_t(lo);
 			state.mem[state.ip++] = byte;
 		}
-
-		/*
-		auto instrs = decode(is);
-
-		for(auto &instr : instrs) {
-			std::cout << instr.op << std::endl;
-			state.mem[state.ip++] = instr.op
-		}
-		*/
 	}
 
 	state.ip = 0;

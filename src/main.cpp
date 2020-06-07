@@ -25,7 +25,9 @@ void debug(cpu_state &state) {
 		std::cout << "0x" << std::setfill('0') << std::setw(4) << std::hex << state.reg[i];
 		std::cout << std::endl;
 	}
-	std::cout << "ip = " << state.ip << std::endl;
+	std::cout << "ip = ";
+	std::cout << "0x" << std::setfill('0') << std::setw(4) << std::hex << state.ip;
+	std::cout << std::endl;
 }
 
 std::optional<shk::instruction> decode(cpu_state &state) {

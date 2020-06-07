@@ -90,10 +90,24 @@ bool execute(cpu_state &state) {
 		for(auto &command : instr->commands) {
 			switch(command.ty) {
 			case shk::command::type::eq:
-				if(eval(state, command.operands[0]) == 0u) {
+				if(!(eval(state, command.operands[0]) == 0u)) {
 					return true;
 				}
 				break;
+			case shk::command::type::lt: {
+				auto x = eval(state, command.operands[0]);
+				if(!(*reinterpret_cast<int16_t *>(&x) < 0)) {
+					return true;
+				}
+				break;
+			}
+			case shk::command::type::le: {
+				auto x = eval(state, command.operands[0]);
+				if(!(*reinterpret_cast<int16_t *>(&x) <= 0)) {
+					return true;
+				}
+				break;
+			}
 			default:
 				std::cerr << "error: " << command.ty << " not implemented" << std::endl;
 				return false;
@@ -127,7 +141,7 @@ bool execute(cpu_state &state) {
 			state.ip = eval(state, instr->operands[0]);
 			break;
 		default:
-			std::cerr << "not implemented" << std::endl;
+			std::cerr << "error: " << instr->op << " not implemented" << std::endl;
 			break;
 		}
 		std::cout << "executed " << instr->op << std::endl;

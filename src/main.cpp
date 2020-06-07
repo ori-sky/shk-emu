@@ -48,9 +48,11 @@ std::optional<shk::instruction> decode(cpu_state &state) {
 
 	instr.op = static_cast<shk::opcode>(state.mem[state.ip++]);
 	for(size_t i = 0; i < shk::num_operands(instr.op); ++i) {
+		auto byte = state.mem[state.ip++];
+
 		shk::operand operand;
-		operand.value = state.mem[state.ip++] & 0xFF;
-		operand.ty = static_cast<shk::operand::type>(operand.value >> 15u);
+		operand.ty = static_cast<shk::operand::type>(byte >> 15u);
+		operand.value = byte & 0xFF;
 		instr.operands.emplace_back(operand);
 	}
 
@@ -58,9 +60,25 @@ std::optional<shk::instruction> decode(cpu_state &state) {
 	return instr;
 }
 
+uint16_t eval(cpu_state &state, shk::operand &operand) {
+	switch(operand.ty) {
+	case shk::operand::type::imm:
+		return operand.value;
+	case shk::operand::type::reg:
+		return state.reg[operand.value];
+	default:
+		std::cerr << "error: invalid operand type" << std::endl;
+		break;
+	}
+
+	return 0;
+}
+
 bool execute(cpu_state &state) {
 	if(auto instr = decode(state)) {
 		switch(instr->op) {
+		case shk::opcode::noop:
+			break;
 		case shk::opcode::debug:
 			debug(state);
 			std::cout << "Hit enter to continue" << std::endl;
@@ -70,20 +88,13 @@ bool execute(cpu_state &state) {
 			state.mem[instr->operands[0].value] = instr->operands[1].value;
 			break;
 		case shk::opcode::move:
-			switch(instr->operands[0].ty) {
-			case shk::operand::type::imm:
-				state.reg[instr->operands[0].value] = instr->operands[1].value;
-				break;
-			case shk::operand::type::reg:
-				state.reg[instr->operands[0].value] = state.reg[instr->operands[1].value];
-				break;
-			default:
-				std::cerr << "error: invalid operand type" << std::endl;
-				break;
-			}
+			state.reg[instr->operands[0].value] = eval(state, instr->operands[1]);
 			break;
 		case shk::opcode::add:
-			state.reg[instr->operands[0].value] = state.reg[instr->operands[1].value] + state.reg[instr->operands[2].value];
+			state.reg[instr->operands[0].value] = eval(state, instr->operands[1]) + eval(state, instr->operands[2]);
+			break;
+		case shk::opcode::branch:
+			state.ip = instr->operands[0].value;
 			break;
 		default:
 			std::cerr << "not implemented" << std::endl;

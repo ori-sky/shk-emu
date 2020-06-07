@@ -33,29 +33,38 @@ void debug(cpu_state &state) {
 std::optional<shk::instruction> decode(cpu_state &state) {
 	shk::instruction instr;
 
-	if(state.mem[state.ip] >> 15u) {
-		/*
+	auto byte = state.mem[state.ip++];
+
+	if(byte >> 15u) {
 		shk::command command;
-		command.ty = static_cast<shk::command::type>(state.mem[state.ip] & 0xF);
+		command.ty = static_cast<shk::command::type>(byte & 0xFF);
 
-		is.read(reinterpret_cast<char *>(&hi), 1);
-		is.read(reinterpret_cast<char *>(&lo), 1);
+		for(size_t i = 0; i < shk::num_operands(command.ty); ++i) {
+			auto byte = state.mem[state.ip++];
 
-		instr = decode_one(is);
+			shk::operand operand;
+			operand.ty = static_cast<shk::operand::type>(byte >> 15u);
+			operand.value = byte & 0xFF;
+			command.operands.emplace_back(operand);
+		}
+
+		auto ins = decode(state);
+		if(!ins) {
+			return {};
+		}
+
+		instr = *ins;
 		instr.commands.emplace_back(command);
-		*/
-		std::cerr << "commands not supported yet" << std::endl;
-		return {};
-	}
+	} else {
+		instr.op = static_cast<shk::opcode>(byte);
+		for(size_t i = 0; i < shk::num_operands(instr.op); ++i) {
+			auto byte = state.mem[state.ip++];
 
-	instr.op = static_cast<shk::opcode>(state.mem[state.ip++]);
-	for(size_t i = 0; i < shk::num_operands(instr.op); ++i) {
-		auto byte = state.mem[state.ip++];
-
-		shk::operand operand;
-		operand.ty = static_cast<shk::operand::type>(byte >> 15u);
-		operand.value = byte & 0xFF;
-		instr.operands.emplace_back(operand);
+			shk::operand operand;
+			operand.ty = static_cast<shk::operand::type>(byte >> 15u);
+			operand.value = byte & 0xFF;
+			instr.operands.emplace_back(operand);
+		}
 	}
 
 	std::cout << "decoded " << instr.op << std::endl;
@@ -78,6 +87,19 @@ uint16_t eval(cpu_state &state, shk::operand &operand) {
 
 bool execute(cpu_state &state) {
 	if(auto instr = decode(state)) {
+		for(auto &command : instr->commands) {
+			switch(command.ty) {
+			case shk::command::type::eq:
+				if(eval(state, command.operands[0]) == 0u) {
+					return true;
+				}
+				break;
+			default:
+				std::cerr << "error: " << command.ty << " not implemented" << std::endl;
+				return false;
+			}
+		}
+
 		switch(instr->op) {
 		case shk::opcode::noop:
 			break;
@@ -86,8 +108,11 @@ bool execute(cpu_state &state) {
 			std::cout << "Hit enter to continue" << std::endl;
 			getc(stdin);
 			break;
+		case shk::opcode::load:
+			state.reg[instr->operands[0].value] = state.mem[eval(state, instr->operands[1])];
+			break;
 		case shk::opcode::store:
-			state.mem[instr->operands[0].value] = instr->operands[1].value;
+			state.mem[eval(state, instr->operands[0])] = eval(state, instr->operands[1]);
 			break;
 		case shk::opcode::move:
 			state.reg[instr->operands[0].value] = eval(state, instr->operands[1]);
@@ -95,8 +120,11 @@ bool execute(cpu_state &state) {
 		case shk::opcode::add:
 			state.reg[instr->operands[0].value] = eval(state, instr->operands[1]) + eval(state, instr->operands[2]);
 			break;
+		case shk::opcode::compare:
+			state.reg[instr->operands[0].value] = eval(state, instr->operands[1]) - eval(state, instr->operands[2]);
+			break;
 		case shk::opcode::branch:
-			state.ip = instr->operands[0].value;
+			state.ip = eval(state, instr->operands[0]);
 			break;
 		default:
 			std::cerr << "not implemented" << std::endl;

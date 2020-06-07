@@ -26,21 +26,21 @@ void debug(cpu_state &state) {
 		std::cout << std::endl;
 	}
 	std::cout << "ip = ";
-	std::cout << "0x" << std::setfill('0') << std::setw(4) << std::hex << state.ip;
+	std::cout << "0x" << std::setfill('0') << std::setw(4) << std::hex << state.reg[0xFF];
 	std::cout << std::endl;
 }
 
 std::optional<shk::instruction> decode(cpu_state &state) {
 	shk::instruction instr;
 
-	auto byte = state.mem[state.ip++];
+	auto byte = state.mem[state.reg[0xFF]++];
 
 	if(byte >> 15u) {
 		shk::command command;
 		command.ty = static_cast<shk::command::type>(byte & 0xFF);
 
 		for(size_t i = 0; i < shk::num_operands(command.ty); ++i) {
-			auto byte = state.mem[state.ip++];
+			auto byte = state.mem[state.reg[0xFF]++];
 
 			shk::operand operand;
 			operand.ty = static_cast<shk::operand::type>(byte >> 15u);
@@ -58,7 +58,7 @@ std::optional<shk::instruction> decode(cpu_state &state) {
 	} else {
 		instr.op = static_cast<shk::opcode>(byte);
 		for(size_t i = 0; i < shk::num_operands(instr.op); ++i) {
-			auto byte = state.mem[state.ip++];
+			auto byte = state.mem[state.reg[0xFF]++];
 
 			shk::operand operand;
 			operand.ty = static_cast<shk::operand::type>(byte >> 15u);
@@ -147,7 +147,7 @@ bool execute(cpu_state &state) {
 			state.reg[instr->operands[0].value] = eval(state, instr->operands[1]) * eval(state, instr->operands[2]);
 			break;
 		case shk::opcode::branch:
-			state.ip = eval(state, instr->operands[0]);
+			state.reg[0xFF] = eval(state, instr->operands[0]);
 			break;
 		default:
 			std::cerr << "error: " << instr->op << " not implemented" << std::endl;
@@ -187,11 +187,11 @@ int main(int argc, char *argv[]) {
 			is.read(reinterpret_cast<char *>(&hi), 1);
 			is.read(reinterpret_cast<char *>(&lo), 1);
 			uint16_t byte = (uint16_t(hi) << 8u) | uint16_t(lo);
-			state.mem[state.ip++] = byte;
+			state.mem[state.reg[0xFF]++] = byte;
 		}
 	}
 
-	state.ip = 0;
+	state.reg[0xFF] = 0;
 
 	while(execute(state)) {}
 

@@ -71,18 +71,25 @@ std::optional<shk::instruction> decode(cpu_state &state) {
 	return instr;
 }
 
-uint16_t eval(cpu_state &state, shk::operand &operand) {
+uint16_t eval_ref(cpu_state &state, shk::operand &operand) {
 	switch(operand.ty) {
 	case shk::operand::type::imm:
-		return operand.value;
+		std::cerr << "error: eval_ref: cannot reference an immediate" << std::endl;
+		return 0;
 	case shk::operand::type::reg:
-		return state.reg[operand.value];
+		return operand.value;
 	default:
-		std::cerr << "error: invalid operand type" << std::endl;
-		break;
+		std::cerr << "error: eval_ref: invalid operand type" << std::endl;
+		return 0;
 	}
+}
 
-	return 0;
+uint16_t eval(cpu_state &state, shk::operand &operand) {
+	if(operand.ty == shk::operand::type::imm) {
+		return operand.value;
+	} else {
+		return state.reg[eval_ref(state, operand)];
+	}
 }
 
 bool execute(cpu_state &state) {
@@ -129,31 +136,31 @@ bool execute(cpu_state &state) {
 		case shk::opcode::die:
 			return false;
 		case shk::opcode::load:
-			state.reg[instr->operands[0].value] = state.mem[eval(state, instr->operands[1])];
+			state.reg[eval_ref(state, instr->operands[0])] = state.mem[eval(state, instr->operands[1])];
 			break;
 		case shk::opcode::store:
 			state.mem[eval(state, instr->operands[0])] = eval(state, instr->operands[1]);
 			break;
 		case shk::opcode::move:
-			state.reg[instr->operands[0].value] = eval(state, instr->operands[1]);
+			state.reg[eval_ref(state, instr->operands[0])] = eval(state, instr->operands[1]);
 			break;
 		case shk::opcode::add:
-			state.reg[instr->operands[0].value] = eval(state, instr->operands[1]) + eval(state, instr->operands[2]);
+			state.reg[eval_ref(state, instr->operands[0])] = eval(state, instr->operands[1]) + eval(state, instr->operands[2]);
 			break;
 		case shk::opcode::compare:
-			state.reg[instr->operands[0].value] = eval(state, instr->operands[1]) - eval(state, instr->operands[2]);
+			state.reg[eval_ref(state, instr->operands[0])] = eval(state, instr->operands[1]) - eval(state, instr->operands[2]);
 			break;
 		case shk::opcode::multiply:
-			state.reg[instr->operands[0].value] = eval(state, instr->operands[1]) * eval(state, instr->operands[2]);
+			state.reg[eval_ref(state, instr->operands[0])] = eval(state, instr->operands[1]) * eval(state, instr->operands[2]);
 			break;
 		case shk::opcode::branch:
 			state.reg[state.ip] = eval(state, instr->operands[0]);
 			break;
 		case shk::opcode::get_ip:
-			state.reg[instr->operands[0].value] = state.ip;
+			state.reg[eval_ref(state, instr->operands[0])] = state.ip;
 			break;
 		case shk::opcode::set_ip:
-			state.ip = instr->operands[0].value;
+			state.ip = eval_ref(state, instr->operands[0]);
 			break;
 		default:
 			std::cerr << "error: " << instr->op << " not implemented" << std::endl;

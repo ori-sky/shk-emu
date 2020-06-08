@@ -143,6 +143,9 @@ bool execute(cpu_state &state) {
 		case shk::opcode::compare:
 			state.reg[instr->operands[0].value] = eval(state, instr->operands[1]) - eval(state, instr->operands[2]);
 			break;
+		case shk::opcode::multiply:
+			state.reg[instr->operands[0].value] = eval(state, instr->operands[1]) * eval(state, instr->operands[2]);
+			break;
 		case shk::opcode::branch:
 			state.ip = eval(state, instr->operands[0]);
 			break;

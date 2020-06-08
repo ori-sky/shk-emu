@@ -122,6 +122,12 @@ bool execute(cpu_state &state) {
 			std::cout << "Hit enter to continue" << std::endl;
 			getc(stdin);
 			break;
+		case shk::opcode::halt:
+			std::cout << "Hit enter to continue" << std::endl;
+			getc(stdin);
+			break;
+		case shk::opcode::die:
+			return false;
 		case shk::opcode::load:
 			state.reg[instr->operands[0].value] = state.mem[eval(state, instr->operands[1])];
 			break;

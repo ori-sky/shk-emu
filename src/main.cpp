@@ -43,7 +43,7 @@ std::optional<shk::instruction> decode(cpu_state &state) {
 			auto byte = state.mem[state.reg[state.ip]++];
 
 			shk::operand operand;
-			operand.ty = static_cast<shk::operand::type>(byte >> 15u);
+			operand.ty = static_cast<shk::operand::type>(byte >> 14u);
 			operand.value = byte & 0xFF;
 			command.operands.emplace_back(operand);
 		}
@@ -61,7 +61,7 @@ std::optional<shk::instruction> decode(cpu_state &state) {
 			auto byte = state.mem[state.reg[state.ip]++];
 
 			shk::operand operand;
-			operand.ty = static_cast<shk::operand::type>(byte >> 15u);
+			operand.ty = static_cast<shk::operand::type>(byte >> 14u);
 			operand.value = byte & 0xFF;
 			instr.operands.emplace_back(operand);
 		}
@@ -78,6 +78,8 @@ uint16_t eval_ref(cpu_state &state, shk::operand &operand) {
 		return 0;
 	case shk::operand::type::reg:
 		return operand.value;
+	case shk::operand::type::deref:
+		return state.reg[operand.value];
 	default:
 		std::cerr << "error: eval_ref: invalid operand type" << std::endl;
 		return 0;

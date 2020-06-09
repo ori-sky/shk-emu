@@ -10,6 +10,7 @@ struct cpu_state {
 	uint16_t mem[0x10000] = {0};
 	uint16_t reg[0x100] = {0};
 	uint16_t ip = 0xFF;
+	uint16_t sp = 0xFE;
 };
 
 void debug(cpu_state &state) {
@@ -172,11 +173,26 @@ bool execute(cpu_state &state) {
 		case shk::opcode::branch:
 			state.reg[state.ip] = eval(state, instr->operands[0]);
 			break;
+		case shk::opcode::call:
+			--state.reg[state.sp];
+			state.mem[state.reg[state.sp]] = state.reg[state.ip];
+			state.reg[state.ip] = eval(state, instr->operands[0]);
+			break;
+		case shk::opcode::ret:
+			state.reg[state.ip] = state.mem[state.reg[state.sp]];
+			++state.reg[state.sp];
+			break;
 		case shk::opcode::get_ip:
 			state.reg[eval_ref(state, instr->operands[0])] = state.ip;
 			break;
 		case shk::opcode::set_ip:
 			state.ip = eval_ref(state, instr->operands[0]);
+			break;
+		case shk::opcode::get_sp:
+			state.reg[eval_ref(state, instr->operands[0])] = state.sp;
+			break;
+		case shk::opcode::set_sp:
+			state.sp = eval_ref(state, instr->operands[0]);
 			break;
 		default:
 			std::cerr << "error: " << instr->op << " not implemented" << std::endl;
@@ -221,6 +237,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	state.reg[state.ip] = 0;
+	state.reg[state.sp] = 0;
 
 	while(execute(state)) {}
 

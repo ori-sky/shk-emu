@@ -117,6 +117,20 @@ bool execute(cpu_state &state) {
 				}
 				break;
 			}
+			case shk::command::type::gt: {
+				auto x = eval(state, command.operands[0]);
+				if(!(*reinterpret_cast<int16_t *>(&x) > 0)) {
+					return true;
+				}
+				break;
+			}
+			case shk::command::type::ge: {
+				auto x = eval(state, command.operands[0]);
+				if(!(*reinterpret_cast<int16_t *>(&x) >= 0)) {
+					return true;
+				}
+				break;
+			}
 			default:
 				std::cerr << "error: " << command.ty << " not implemented" << std::endl;
 				return false;

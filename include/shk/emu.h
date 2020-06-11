@@ -27,45 +27,56 @@ namespace shk {
 			return true;
 		}
 
-		uint16_t eval_ref(shk::operand &operand) {
-			switch(operand.ty) {
-			case shk::operand::type::imm:
+		uint16_t eval_ref(operand &oper) {
+			switch(oper.ty) {
+			case operand::type::imm:
 				std::cerr << "error: eval_ref: cannot reference an immediate" << std::endl;
 				return 0;
-			case shk::operand::type::reg:
-				return operand.value;
-			case shk::operand::type::deref:
-				return reg[operand.value];
+			case operand::type::reg:
+				return oper.value;
+			case operand::type::deref:
+				return reg[oper.value];
 			default:
 				std::cerr << "error: eval_ref: invalid operand type" << std::endl;
 				return 0;
 			}
 		}
 
-		uint16_t eval(shk::operand &operand) {
-			if(operand.ty == shk::operand::type::imm) {
-				return operand.value;
+		uint16_t eval(operand &oper) {
+			if(oper.ty == operand::type::imm) {
+				return oper.value;
 			} else {
-				return reg[eval_ref(operand)];
+				return reg[eval_ref(oper)];
 			}
 		}
 
-		std::optional<shk::instruction> decode() {
-			shk::instruction instr;
+		operand decode_operand() {
+			auto byte = mem[reg[ip]++];
+
+			operand oper;
+			oper.ty = static_cast<operand::type>(byte >> 12u);
+			oper.value = byte & 0xFF;
+
+			if(byte >> 15u) {
+				auto oper2 = decode_operand();
+				oper.segment = std::make_unique<operand>(std::move(oper));
+				return oper2;
+			} else {
+				return oper;
+			}
+		}
+
+		std::optional<instruction> decode() {
+			instruction instr;
 
 			auto byte = mem[reg[ip]++];
 
 			if(byte >> 15u) {
-				shk::command command;
-				command.ty = static_cast<shk::command::type>(byte & 0xFF);
+				command cmd;
+				cmd.ty = static_cast<command::type>(byte & 0xFF);
 
-				for(size_t i = 0; i < shk::num_operands(command.ty); ++i) {
-					auto byte = mem[reg[ip]++];
-
-					shk::operand operand;
-					operand.ty = static_cast<shk::operand::type>(byte >> 14u);
-					operand.value = byte & 0xFF;
-					command.operands.emplace_back(operand);
+				for(size_t i = 0; i < num_operands(cmd.ty); ++i) {
+					cmd.operands.emplace_back(decode_operand());
 				}
 
 				auto ins = decode();
@@ -73,17 +84,12 @@ namespace shk {
 					return {};
 				}
 
-				instr = *ins;
-				instr.commands.emplace_back(command);
+				instr = std::move(*ins);
+				instr.commands.emplace_back(std::move(cmd));
 			} else {
-				instr.op = static_cast<shk::opcode>(byte);
-				for(size_t i = 0; i < shk::num_operands(instr.op); ++i) {
-					auto byte = mem[reg[ip]++];
-
-					shk::operand operand;
-					operand.ty = static_cast<shk::operand::type>(byte >> 14u);
-					operand.value = byte & 0xFF;
-					instr.operands.emplace_back(operand);
+				instr.op = static_cast<opcode>(byte);
+				for(size_t i = 0; i < num_operands(instr.op); ++i) {
+					instr.operands.emplace_back(decode_operand());
 				}
 			}
 
@@ -95,101 +101,101 @@ namespace shk {
 
 		bool exec() {
 			if(auto instr = decode()) {
-				for(auto &command : instr->commands) {
-					switch(command.ty) {
-					case shk::command::type::eq:
-						if(!(eval(command.operands[0]) == 0u)) {
+				for(auto &cmd : instr->commands) {
+					switch(cmd.ty) {
+					case command::type::eq:
+						if(!(eval(cmd.operands[0]) == 0u)) {
 							return true;
 						}
 						break;
-					case shk::command::type::lt: {
-						auto x = eval(command.operands[0]);
+					case command::type::lt: {
+						auto x = eval(cmd.operands[0]);
 						if(!(*reinterpret_cast<int16_t *>(&x) < 0)) {
 							return true;
 						}
 						break;
 					}
-					case shk::command::type::le: {
-						auto x = eval(command.operands[0]);
+					case command::type::le: {
+						auto x = eval(cmd.operands[0]);
 						if(!(*reinterpret_cast<int16_t *>(&x) <= 0)) {
 							return true;
 						}
 						break;
 					}
-					case shk::command::type::gt: {
-						auto x = eval(command.operands[0]);
+					case command::type::gt: {
+						auto x = eval(cmd.operands[0]);
 						if(!(*reinterpret_cast<int16_t *>(&x) > 0)) {
 							return true;
 						}
 						break;
 					}
-					case shk::command::type::ge: {
-						auto x = eval(command.operands[0]);
+					case command::type::ge: {
+						auto x = eval(cmd.operands[0]);
 						if(!(*reinterpret_cast<int16_t *>(&x) >= 0)) {
 							return true;
 						}
 						break;
 					}
 					default:
-						std::cerr << "error: " << command.ty << " not implemented" << std::endl;
+						std::cerr << "error: " << cmd.ty << " not implemented" << std::endl;
 						return false;
 					}
 				}
 
 				switch(instr->op) {
-				case shk::opcode::noop:
+				case opcode::noop:
 					break;
-				case shk::opcode::debug:
+				case opcode::debug:
 					debug();
 					std::cout << "Hit enter to continue" << std::endl;
 					getc(stdin);
 					break;
-				case shk::opcode::halt:
+				case opcode::halt:
 					std::cout << "Hit enter to continue" << std::endl;
 					getc(stdin);
 					break;
-				case shk::opcode::die:
+				case opcode::die:
 					return false;
-				case shk::opcode::load:
+				case opcode::load:
 					reg[eval_ref(instr->operands[0])] = mem[eval(instr->operands[1])];
 					break;
-				case shk::opcode::store:
+				case opcode::store:
 					mem[eval(instr->operands[0])] = eval(instr->operands[1]);
 					break;
-				case shk::opcode::move:
+				case opcode::move:
 					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]);
 					break;
-				case shk::opcode::add:
+				case opcode::add:
 					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) + eval(instr->operands[2]);
 					break;
-				case shk::opcode::compare:
+				case opcode::compare:
 					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) - eval(instr->operands[2]);
 					break;
-				case shk::opcode::multiply:
+				case opcode::multiply:
 					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) * eval(instr->operands[2]);
 					break;
-				case shk::opcode::branch:
+				case opcode::branch:
 					reg[ip] = eval(instr->operands[0]);
 					break;
-				case shk::opcode::call:
+				case opcode::call:
 					--reg[sp];
 					mem[reg[sp]] = reg[ip];
 					reg[ip] = eval(instr->operands[0]);
 					break;
-				case shk::opcode::ret:
+				case opcode::ret:
 					reg[ip] = mem[reg[sp]];
 					++reg[sp];
 					break;
-				case shk::opcode::get_ip:
+				case opcode::get_ip:
 					reg[eval_ref(instr->operands[0])] = ip;
 					break;
-				case shk::opcode::set_ip:
+				case opcode::set_ip:
 					ip = eval_ref(instr->operands[0]);
 					break;
-				case shk::opcode::get_sp:
+				case opcode::get_sp:
 					reg[eval_ref(instr->operands[0])] = sp;
 					break;
-				case shk::opcode::set_sp:
+				case opcode::set_sp:
 					sp = eval_ref(instr->operands[0]);
 					break;
 				default:

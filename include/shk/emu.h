@@ -54,12 +54,12 @@ namespace shk {
 			auto byte = mem[reg[ip]++];
 
 			operand oper;
-			oper.ty = static_cast<operand::type>(byte >> 12u);
+			oper.ty = static_cast<operand::type>((byte >> 12u) & 0b11);
 			oper.value = byte & 0xFF;
 
 			if(byte >> 15u) {
 				auto oper2 = decode_operand();
-				oper.segment = std::make_unique<operand>(std::move(oper));
+				oper2.segment = std::make_unique<operand>(std::move(oper));
 				return oper2;
 			} else {
 				return oper;
@@ -156,12 +156,24 @@ namespace shk {
 					break;
 				case opcode::die:
 					return false;
-				case opcode::load:
+				case opcode::load: {
+					auto seg = instr->operands[1].segment ? eval(*instr->operands[1].segment) : 0;
+					if(seg != 0) {
+						std::cerr << "error: unknown segment " << seg << std::endl;
+						return false;
+					}
 					reg[eval_ref(instr->operands[0])] = mem[eval(instr->operands[1])];
 					break;
-				case opcode::store:
+				}
+				case opcode::store: {
+					auto seg = instr->operands[0].segment ? eval(*instr->operands[0].segment) : 0;
+					if(seg != 0) {
+						std::cerr << "error: unknown segment " << seg << std::endl;
+						return false;
+					}
 					mem[eval(instr->operands[0])] = eval(instr->operands[1]);
 					break;
+				}
 				case opcode::move:
 					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]);
 					break;

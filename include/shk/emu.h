@@ -220,6 +220,9 @@ namespace shk {
 			}
 			std::cout << "ip = ";
 			std::cout << "0x" << std::setfill('0') << std::setw(4) << std::hex << reg[ip];
+			std::cout << "   ";
+			std::cout << "sp = ";
+			std::cout << "0x" << std::setfill('0') << std::setw(4) << std::hex << reg[sp];
 			std::cout << std::endl;
 		}
 

@@ -167,11 +167,17 @@ namespace shk {
 				}
 				case opcode::store: {
 					auto seg = instr->operands[0].segment ? eval(*instr->operands[0].segment) : 0;
-					if(seg != 0) {
+					switch(seg) {
+					case 0:
+						mem[eval(instr->operands[0])] = eval(instr->operands[1]);
+						break;
+					case 1:
+						std::cout << "out: " << eval(instr->operands[1]) << std::endl;
+						break;
+					default:
 						std::cerr << "error: unknown segment " << seg << std::endl;
 						return false;
 					}
-					mem[eval(instr->operands[0])] = eval(instr->operands[1]);
 					break;
 				}
 				case opcode::move:

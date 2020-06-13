@@ -108,6 +108,11 @@ namespace shk {
 							return true;
 						}
 						break;
+					case command::type::ne:
+						if(!(eval(cmd.operands[0]) != 0u)) {
+							return true;
+						}
+						break;
 					case command::type::lt: {
 						auto x = eval(cmd.operands[0]);
 						if(!(*reinterpret_cast<int16_t *>(&x) < 0)) {

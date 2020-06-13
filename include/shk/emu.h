@@ -193,6 +193,14 @@ namespace shk {
 					}
 					break;
 				}
+				case opcode::pop:
+					reg[eval_ref(instr->operands[0])] = mem[reg[sp]];
+					++reg[sp];
+					break;
+				case opcode::push:
+					--reg[sp];
+					mem[reg[sp]] = eval(instr->operands[0]);
+					break;
 				case opcode::move:
 					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]);
 					break;

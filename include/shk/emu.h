@@ -55,7 +55,7 @@ namespace shk {
 
 			operand oper;
 			oper.ty = static_cast<operand::type>((byte >> 12u) & 0b11);
-			oper.value = byte & 0xFF;
+			oper.value = byte & 0xFFF;
 
 			if(byte >> 15u) {
 				auto oper2 = decode_operand();
@@ -212,6 +212,12 @@ namespace shk {
 					break;
 				case opcode::multiply:
 					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) * eval(instr->operands[2]);
+					break;
+				case opcode::divide:
+					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) / eval(instr->operands[2]);
+					break;
+				case opcode::modulo:
+					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) % eval(instr->operands[2]);
 					break;
 				case opcode::branch:
 					reg[ip] = eval(instr->operands[0]);

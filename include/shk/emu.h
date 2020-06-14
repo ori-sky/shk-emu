@@ -3,6 +3,7 @@
 #include <iomanip>
 
 #include <shk.h>
+#include <shk/util.h>
 
 namespace shk {
 	class emulator {
@@ -16,7 +17,7 @@ namespace shk {
 
 		emulator(bool verbose = false) : verbose(verbose) {}
 
-		bool load(std::istream &is) {
+		void load(std::istream &is) {
 			while(is.peek() != EOF) {
 				uint8_t hi, lo;
 				is.read(reinterpret_cast<char *>(&hi), 1);
@@ -24,21 +25,18 @@ namespace shk {
 				uint16_t byte = (uint16_t(hi) << 8u) | uint16_t(lo);
 				mem[reg[ip]++] = byte;
 			}
-			return true;
 		}
 
 		uint16_t eval_ref(operand &oper) const {
 			switch(oper.ty) {
 			case operand::type::imm:
-				std::cerr << "error: eval_ref: cannot reference an immediate" << std::endl;
-				return 0;
+				throw std::runtime_error("cannot reference an immediate");
 			case operand::type::reg:
 				return oper.value;
 			case operand::type::deref:
 				return reg[oper.value];
 			default:
-				std::cerr << "error: eval_ref: invalid operand type" << std::endl;
-				return 0;
+				throw std::runtime_error("invalid operand type");
 			}
 		}
 
@@ -66,7 +64,7 @@ namespace shk {
 			}
 		}
 
-		std::optional<instruction> decode() {
+		instruction decode() {
 			instruction instr;
 
 			auto byte = mem[reg[ip]++];
@@ -79,15 +77,11 @@ namespace shk {
 					cmd.operands.emplace_back(decode_operand());
 				}
 
-				auto ins = decode();
-				if(!ins) {
-					return {};
-				}
-
-				instr = std::move(*ins);
+				instr = decode();
 				instr.commands.emplace_back(std::move(cmd));
 			} else {
 				instr.op = static_cast<opcode>(byte);
+
 				for(size_t i = 0; i < num_operands(instr.op); ++i) {
 					instr.operands.emplace_back(decode_operand());
 				}
@@ -96,6 +90,7 @@ namespace shk {
 			if(verbose) {
 				std::cout << "decoded " << instr.op << std::endl;
 			}
+
 			return instr;
 		}
 
@@ -141,8 +136,7 @@ namespace shk {
 					break;
 				}
 				default:
-					std::cerr << "error: " << cmd.ty << " not implemented" << std::endl;
-					return false;
+					throw std::runtime_error("command type not implemented");
 				}
 			}
 
@@ -172,8 +166,7 @@ namespace shk {
 					break;
 				}
 				default:
-					std::cerr << "error: unknown segment " << seg << std::endl;
-					return false;
+					throw std::runtime_error("unknown segment");
 				}
 				break;
 			}
@@ -187,8 +180,7 @@ namespace shk {
 					std::cout << char(eval(instr.operands[1]));
 					break;
 				default:
-					std::cerr << "error: unknown segment " << seg << std::endl;
-					return false;
+					throw std::runtime_error("unknown segment");
 				}
 				break;
 			}
@@ -243,12 +235,86 @@ namespace shk {
 				sp = eval_ref(instr.operands[0]);
 				break;
 			default:
-				std::cerr << "error: " << instr.op << " not implemented" << std::endl;
-				break;
+				throw std::runtime_error("opcode not implemented");
 			}
+
 			if(verbose) {
 				std::cout << "executed " << instr.op << std::endl;
 			}
+
+			return true;
+		}
+
+		bool debug_one(std::string_view line) {
+			auto words = split(line);
+
+			if(words.empty()) {
+				return true;
+			}
+
+			auto cmd = words[0];
+
+			if(cmd == "q") {
+				return false;
+			} else if(cmd == "p") {
+				if(words.size() >= 2) {
+					auto oper = parse_operand(words[1]);
+
+					std::cout << words[1] << " = #";
+					switch(oper.ty) {
+					case operand::type::imm:
+						std::cout << oper.value;
+						break;
+					case operand::type::reg:
+						std::cout << reg[oper.value];
+						break;
+					case operand::type::deref:
+						std::cout << reg[reg[oper.value]];
+						break;
+					}
+					std::cout << std::endl;
+				}
+			} else if(cmd == "si") {
+				auto instr = decode();
+
+				auto mnemonic = opcode_to_mnemonic(instr.op);
+				std::cout << mnemonic;
+
+				for(size_t i = 0; i < instr.operands.size(); ++i) {
+					auto &oper = instr.operands[i];
+
+					if(i > 0) {
+						std::cout << ',';
+					}
+					std::cout << ' ';
+					if(oper.segment) {
+						std::cout << oper.segment->type_char() << oper.segment->value << ':';
+					}
+					std::cout << oper.type_char() << oper.value;
+				}
+
+				for(auto &cmd : instr.commands) {
+					auto mnemonic = command_to_mnemonic(cmd.ty);
+					if(!instr.operands.empty()) {
+						std::cout << ',';
+					}
+					std::cout << " !" << mnemonic;
+					for(size_t i = 0; i < cmd.operands.size(); ++i) {
+						auto &oper = cmd.operands[i];
+
+						std::cout << ' ';
+						if(oper.segment) {
+							std::cout << oper.segment->type_char() << oper.segment->value << ':';
+						}
+						std::cout << oper.type_char() << oper.value;
+					}
+				}
+
+				std::cout << std::endl;
+
+				exec(instr);
+			}
+
 			return true;
 		}
 
@@ -274,53 +340,18 @@ namespace shk {
 			std::cout << std::endl;
 			*/
 
-			std::string cmd;
+			std::string implied_line;
 			for(;;) {
 				std::cout << "> ";
 				std::string line;
 				std::getline(std::cin, line);
 
 				if(!line.empty()) {
-					cmd = line;
+					implied_line = line;
 				}
 
-				if(cmd == "q") {
-					break;
-				} else if(cmd == "p") {
-					for(size_t i = 0; i < 2; ++i) {
-						std::cout << '$' << i << " = " << reg[i] << std::endl;
-					}
-				} else if(cmd == "si") {
-					auto instr = decode();
-					if(!instr) {
-						return false;
-					}
-
-					if(auto mnemonic = opcode_to_mnemonic(instr->op)) {
-						std::cout << *mnemonic;
-						for(size_t i = 0; i < instr->operands.size(); ++i) {
-							if(i > 0) {
-								std::cout << ',';
-							}
-							std::cout << ' ' << instr->operands[i].type_char();
-							std::cout << instr->operands[i].value;
-						}
-						for(auto &cmd : instr->commands) {
-							if(auto mnemonic = command_to_mnemonic(cmd.ty)) {
-								if(!instr->operands.empty()) {
-									std::cout << ',';
-								}
-								std::cout << " !" << *mnemonic;
-								for(size_t i = 0; i < cmd.operands.size(); ++i) {
-									std::cout << ' ' << cmd.operands[i].type_char();
-									std::cout << cmd.operands[i].value;
-								}
-							}
-						}
-						std::cout << std::endl;
-					}
-
-					exec(*instr);
+				if(!debug_one(implied_line)) {
+					return false;
 				}
 			}
 
@@ -331,8 +362,11 @@ namespace shk {
 			reg[ip] = 0;
 			reg[sp] = 0;
 
-			while(auto instr = decode()) {
-				exec(*instr);
+			for(;;) {
+				auto instr = decode();
+				if(!exec(instr)) {
+					break;
+				}
 			}
 		}
 	};

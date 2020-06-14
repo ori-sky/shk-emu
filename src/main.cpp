@@ -35,9 +35,7 @@ int main(int argc, char *argv[]) {
 			return 1;
 		}
 
-		if(!emulator.load(is)) {
-			return 2;
-		}
+		emulator.load(is);
 	}
 
 	emulator.run();

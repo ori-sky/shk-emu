@@ -27,7 +27,7 @@ namespace shk {
 			return true;
 		}
 
-		uint16_t eval_ref(operand &oper) {
+		uint16_t eval_ref(operand &oper) const {
 			switch(oper.ty) {
 			case operand::type::imm:
 				std::cerr << "error: eval_ref: cannot reference an immediate" << std::endl;
@@ -42,7 +42,7 @@ namespace shk {
 			}
 		}
 
-		uint16_t eval(operand &oper) {
+		uint16_t eval(operand &oper) const {
 			if(oper.ty == operand::type::imm) {
 				return oper.value;
 			} else {
@@ -100,160 +100,161 @@ namespace shk {
 		}
 
 		bool exec() {
-			if(auto instr = decode()) {
-				for(auto &cmd : instr->commands) {
-					switch(cmd.ty) {
-					case command::type::eq:
-						if(!(eval(cmd.operands[0]) == 0u)) {
-							return true;
-						}
-						break;
-					case command::type::ne:
-						if(!(eval(cmd.operands[0]) != 0u)) {
-							return true;
-						}
-						break;
-					case command::type::lt: {
-						auto x = eval(cmd.operands[0]);
-						if(!(*reinterpret_cast<int16_t *>(&x) < 0)) {
-							return true;
-						}
-						break;
-					}
-					case command::type::le: {
-						auto x = eval(cmd.operands[0]);
-						if(!(*reinterpret_cast<int16_t *>(&x) <= 0)) {
-							return true;
-						}
-						break;
-					}
-					case command::type::gt: {
-						auto x = eval(cmd.operands[0]);
-						if(!(*reinterpret_cast<int16_t *>(&x) > 0)) {
-							return true;
-						}
-						break;
-					}
-					case command::type::ge: {
-						auto x = eval(cmd.operands[0]);
-						if(!(*reinterpret_cast<int16_t *>(&x) >= 0)) {
-							return true;
-						}
-						break;
-					}
-					default:
-						std::cerr << "error: " << cmd.ty << " not implemented" << std::endl;
-						return false;
-					}
-				}
-
-				switch(instr->op) {
-				case opcode::noop:
-					break;
-				case opcode::debug:
-					debug();
-					std::cout << "Hit enter to continue" << std::endl;
-					getc(stdin);
-					break;
-				case opcode::halt:
-					std::cout << "Hit enter to continue" << std::endl;
-					getc(stdin);
-					break;
-				case opcode::die:
-					return false;
-				case opcode::load: {
-					auto seg = instr->operands[1].segment ? eval(*instr->operands[1].segment) : 0;
-					switch(seg) {
-					case 0:
-						reg[eval_ref(instr->operands[0])] = mem[eval(instr->operands[1])];
-						break;
-					case 1: {
-						int c = getc(stdin);
-						reg[eval_ref(instr->operands[0])] = c;
-						break;
-					}
-					default:
-						std::cerr << "error: unknown segment " << seg << std::endl;
-						return false;
-					}
-					break;
-				}
-				case opcode::store: {
-					auto seg = instr->operands[0].segment ? eval(*instr->operands[0].segment) : 0;
-					switch(seg) {
-					case 0:
-						mem[eval(instr->operands[0])] = eval(instr->operands[1]);
-						break;
-					case 1:
-						std::cout << char(eval(instr->operands[1]));
-						break;
-					default:
-						std::cerr << "error: unknown segment " << seg << std::endl;
-						return false;
-					}
-					break;
-				}
-				case opcode::pop:
-					reg[eval_ref(instr->operands[0])] = mem[reg[sp]];
-					++reg[sp];
-					break;
-				case opcode::push:
-					--reg[sp];
-					mem[reg[sp]] = eval(instr->operands[0]);
-					break;
-				case opcode::move:
-					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]);
-					break;
-				case opcode::add:
-					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) + eval(instr->operands[2]);
-					break;
-				case opcode::compare:
-					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) - eval(instr->operands[2]);
-					break;
-				case opcode::multiply:
-					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) * eval(instr->operands[2]);
-					break;
-				case opcode::divide:
-					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) / eval(instr->operands[2]);
-					break;
-				case opcode::modulo:
-					reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) % eval(instr->operands[2]);
-					break;
-				case opcode::branch:
-					reg[ip] = eval(instr->operands[0]);
-					break;
-				case opcode::call:
-					--reg[sp];
-					mem[reg[sp]] = reg[ip];
-					reg[ip] = eval(instr->operands[0]);
-					break;
-				case opcode::ret:
-					reg[ip] = mem[reg[sp]];
-					++reg[sp];
-					break;
-				case opcode::get_ip:
-					reg[eval_ref(instr->operands[0])] = ip;
-					break;
-				case opcode::set_ip:
-					ip = eval_ref(instr->operands[0]);
-					break;
-				case opcode::get_sp:
-					reg[eval_ref(instr->operands[0])] = sp;
-					break;
-				case opcode::set_sp:
-					sp = eval_ref(instr->operands[0]);
-					break;
-				default:
-					std::cerr << "error: " << instr->op << " not implemented" << std::endl;
-					break;
-				}
-				if(verbose) {
-					std::cout << "executed " << instr->op << std::endl;
-				}
-				return true;
-			} else {
+			auto instr = decode();
+			if(!instr) {
 				return false;
 			}
+
+			for(auto &cmd : instr->commands) {
+				switch(cmd.ty) {
+				case command::type::eq:
+					if(!(eval(cmd.operands[0]) == 0u)) {
+						return true;
+					}
+					break;
+				case command::type::ne:
+					if(!(eval(cmd.operands[0]) != 0u)) {
+						return true;
+					}
+					break;
+				case command::type::lt: {
+					auto x = eval(cmd.operands[0]);
+					if(!(*reinterpret_cast<int16_t *>(&x) < 0)) {
+						return true;
+					}
+					break;
+				}
+				case command::type::le: {
+					auto x = eval(cmd.operands[0]);
+					if(!(*reinterpret_cast<int16_t *>(&x) <= 0)) {
+						return true;
+					}
+					break;
+				}
+				case command::type::gt: {
+					auto x = eval(cmd.operands[0]);
+					if(!(*reinterpret_cast<int16_t *>(&x) > 0)) {
+						return true;
+					}
+					break;
+				}
+				case command::type::ge: {
+					auto x = eval(cmd.operands[0]);
+					if(!(*reinterpret_cast<int16_t *>(&x) >= 0)) {
+						return true;
+					}
+					break;
+				}
+				default:
+					std::cerr << "error: " << cmd.ty << " not implemented" << std::endl;
+					return false;
+				}
+			}
+
+			switch(instr->op) {
+			case opcode::noop:
+				break;
+			case opcode::debug:
+				debug();
+				std::cout << "Hit enter to continue" << std::endl;
+				getc(stdin);
+				break;
+			case opcode::halt:
+				std::cout << "Hit enter to continue" << std::endl;
+				getc(stdin);
+				break;
+			case opcode::die:
+				return false;
+			case opcode::load: {
+				auto seg = instr->operands[1].segment ? eval(*instr->operands[1].segment) : 0;
+				switch(seg) {
+				case 0:
+					reg[eval_ref(instr->operands[0])] = mem[eval(instr->operands[1])];
+					break;
+				case 1: {
+					int c = getc(stdin);
+					reg[eval_ref(instr->operands[0])] = c;
+					break;
+				}
+				default:
+					std::cerr << "error: unknown segment " << seg << std::endl;
+					return false;
+				}
+				break;
+			}
+			case opcode::store: {
+				auto seg = instr->operands[0].segment ? eval(*instr->operands[0].segment) : 0;
+				switch(seg) {
+				case 0:
+					mem[eval(instr->operands[0])] = eval(instr->operands[1]);
+					break;
+				case 1:
+					std::cout << char(eval(instr->operands[1]));
+					break;
+				default:
+					std::cerr << "error: unknown segment " << seg << std::endl;
+					return false;
+				}
+				break;
+			}
+			case opcode::pop:
+				reg[eval_ref(instr->operands[0])] = mem[reg[sp]];
+				++reg[sp];
+				break;
+			case opcode::push:
+				--reg[sp];
+				mem[reg[sp]] = eval(instr->operands[0]);
+				break;
+			case opcode::move:
+				reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]);
+				break;
+			case opcode::add:
+				reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) + eval(instr->operands[2]);
+				break;
+			case opcode::compare:
+				reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) - eval(instr->operands[2]);
+				break;
+			case opcode::multiply:
+				reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) * eval(instr->operands[2]);
+				break;
+			case opcode::divide:
+				reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) / eval(instr->operands[2]);
+				break;
+			case opcode::modulo:
+				reg[eval_ref(instr->operands[0])] = eval(instr->operands[1]) % eval(instr->operands[2]);
+				break;
+			case opcode::branch:
+				reg[ip] = eval(instr->operands[0]);
+				break;
+			case opcode::call:
+				--reg[sp];
+				mem[reg[sp]] = reg[ip];
+				reg[ip] = eval(instr->operands[0]);
+				break;
+			case opcode::ret:
+				reg[ip] = mem[reg[sp]];
+				++reg[sp];
+				break;
+			case opcode::get_ip:
+				reg[eval_ref(instr->operands[0])] = ip;
+				break;
+			case opcode::set_ip:
+				ip = eval_ref(instr->operands[0]);
+				break;
+			case opcode::get_sp:
+				reg[eval_ref(instr->operands[0])] = sp;
+				break;
+			case opcode::set_sp:
+				sp = eval_ref(instr->operands[0]);
+				break;
+			default:
+				std::cerr << "error: " << instr->op << " not implemented" << std::endl;
+				break;
+			}
+			if(verbose) {
+				std::cout << "executed " << instr->op << std::endl;
+			}
+			return true;
 		}
 
 		void debug() {
